@@ -21,6 +21,7 @@ int main(int argc, char **argv){
     }
 
     if(*p == '-'){
+      ++p;
       printf("  sub rax, %ld\n", strtol(p, &p, 10));
       continue;
     }
