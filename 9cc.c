@@ -1,3 +1,4 @@
+//#include "9cc.h"
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -28,14 +29,61 @@ typedef struct Node{
   int val;
 } Node;
 
+typedef struct{
+  void **data;
+  int capacity;
+  int len;
+} Vector;
+
 // 関数プロトタイプを書いておく
 Node *mul();
 Node *term();
+Vector *new_vector();
+void vec_push(Vector * vec, void *elem);
 void error(char *fmt, ... );
 
 
 Token tokens[100];
 int pos = 0;
+
+int expect(int line, int expected, int actual){
+  if(expected == actual)
+    return 0;
+  fprintf(stderr, "%d: %d expected, but got %d\n", line, expected, actual);
+  exit(1);
+}
+
+void runtest(){
+  Vector *vec = new_vector();
+  expect(__LINE__, 0, vec->len);
+
+  for(int i = 0; i < 100; i++)
+    vec_push(vec, (void *)i);
+
+  expect(__LINE__, 100, vec->len);
+  expect(__LINE__, 0, (int)vec->data[0]);
+  expect(__LINE__, 50, (int)vec->data[50]);
+  expect(__LINE__, 99, (int)vec->data[99]);
+
+  printf("OK\n");
+
+}
+
+Vector *new_vector(){
+  Vector *vec = malloc(sizeof(Vector));
+  vec->data = malloc(sizeof(void *) * 16);
+  vec->capacity = 16;
+  vec->len = 0;
+  return vec;
+}
+
+void vec_push(Vector * vec, void *elem){
+  if(vec->capacity == vec->len){
+    vec->capacity *= 2;
+    vec->data = realloc(vec->data, sizeof(void *) * vec->capacity);
+  }
+  vec->data[vec->len++] = elem;
+}
 
 Node *new_node(int ty, Node *lhs, Node *rhs){
   Node *node = malloc(sizeof(Node));
@@ -176,6 +224,11 @@ int main(int argc, char **argv){
   if(argc != 2){
     fprintf(stderr, "引数の個数が正しくありません\n");
     return 1;
+  }
+
+  if(strcmp(argv[1], "-test")==0){
+    runtest();
+    return 0;
   }
 
   tokenize(argv[1]);
