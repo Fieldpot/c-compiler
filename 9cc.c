@@ -6,7 +6,8 @@
 
 // トークンの型を表す値
 enum {
-  ND_NUM = 256, // 整数トークン
+  TK_NUM = 256, // 整数トークン
+  TK_EOF,       // 入力の終わりを表すトークン
 };
 
 typedef struct{
@@ -15,87 +16,7 @@ typedef struct{
   char *input;  // トークン文字列（エラーメッセージ用）
 } Token;
 
-typedef struct{
-  int ty;
-
-  struct Node *lhs;
-  struct Node *rhs;
-  int val;
-} Node;
-
-Node *new_node(int ty, Node *lhs, Node *rhs){
-  Node *node = malloc(sizeof(Node));
-
-  node->ty = ty;
-  node->lhs = lhs;
-  node->rhs = rhs;
-  return node;
-}
-
-Node *new_node_num(int val){
-  Node *node = malloc(sizeof(Node));
-
-  node->ty = ND_NUM;
-  node->val = val;
-  return node;
-}
-
-int pos = 0;
 Token tokens[100];
-
-// Prototype
-Node *add();
-Node *mul();
-Node *term();
-
-int consume(int ty){
-  if(tokens[pos].ty != ty)
-    return 0;
-  pos++;
-  return 1;
-}
-
-Node *add(){
-  Node *node = mul();
-
-  for(;;){
-    if (consume('+'))
-      node = new_node('+', node, mul());
-    else if (consume('-'))
-      node = new_node('-', node, mul());
-    else
-      return node;
-  
-  }
-}
-
-Node *mul(){
-  Node *node = term();
-
-  for(;;){
-    if(consume('*'))
-      node = new_node('*', node, term());
-    else if (consume('/'))
-      node = new_node('/', node, term());
-    else
-      return node;
-  }
-}
-
-Node *term(){
-  if(consume('(')){
-    Node *node = add();
-    if(!consume(')'))
-      error("no exit parent: %s", tokens[pos].input);
-    return node;
-  }
-
-  if(tokens[pos].ty == ND_NUM)
-    return new_node_num(tokens[pos++].val);
-
-  error("No nuber error: %s", tokens[pos].input);
-}
-
 
 void error(char *fmt, ... ){
   va_list ap;
@@ -122,7 +43,7 @@ void tokenize(char *p){
     }
 
     if (isdigit(*p)){
-      tokens[i].ty = ND_NUM;
+      tokens[i].ty = TK_NUM;
       tokens[i].input = p;
       tokens[i].val = strtol(p, &p, 10);
       i++;
@@ -133,7 +54,7 @@ void tokenize(char *p){
     exit(1);
   }
 
-  //tokens[i].ty = ND_EOF;
+  tokens[i].ty = TK_EOF;
   tokens[i].input = p;
 }
 
@@ -152,35 +73,35 @@ int main(int argc, char **argv){
 
   // 最初の式は数でなければならないので
   // それをチェックして最初のmov命令を出力
-  //if (tokens[0].ty != TK_NUM)
-  //  error("最初の項が数字ではありません");
-  //printf("  mov rax, %d\n", tokens[0].val);
+  if (tokens[0].ty != TK_NUM)
+    error("最初の項が数字ではありません");
+  printf("  mov rax, %d\n", tokens[0].val);
 
   // `+ <数>`あるいは`- <数>`という
   // トークンの並びを消費しつつ
   // アセンブリを出力
-  //int i = 1;
-  //while(tokens[i].ty != TK_EOF){
-  //  if(tokens[i].ty == '+'){
-  //    i++;
-  //    if (tokens[i].ty != TK_NUM)
-  //      error("予期しないトークンです: %s", tokens[i].input);
-  //    printf("  add rax, %d\n", tokens[i].val);
-  //    i++;
-  //    continue;
-  //  }
+  int i = 1;
+  while(tokens[i].ty != TK_EOF){
+    if(tokens[i].ty == '+'){
+      i++;
+      if (tokens[i].ty != TK_NUM)
+        error("予期しないトークンです: %s", tokens[i].input);
+      printf("  add rax, %d\n", tokens[i].val);
+      i++;
+      continue;
+    }
 
-  //  if (tokens[i].ty == '-'){
-  //    i++;
-  //    if (tokens[i].ty != TK_NUM)
-  //      error("予期しないトークンです: %s", tokens[i].input);
-  //    printf("  sub rax, %d\n", tokens[i].val);
-  //    i++;
-  //    continue;
-  //  }
-  //  
-  //  error("予期しないトークンです: %s", tokens[i].input);
-  //}
-  //printf("  ret\n");
-  //return 0;
+    if (tokens[i].ty == '-'){
+      i++;
+      if (tokens[i].ty != TK_NUM)
+        error("予期しないトークンです: %s", tokens[i].input);
+      printf("  sub rax, %d\n", tokens[i].val);
+      i++;
+      continue;
+    }
+    
+    error("予期しないトークンです: %s", tokens[i].input);
+  }
+  printf("  ret\n");
+  return 0;
 }
