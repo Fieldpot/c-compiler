@@ -13,6 +13,7 @@ enum {
 // トークンの型を表す値
 enum {
   TK_NUM = 256, // 整数トークン
+  TK_IDENT,
   TK_EOF,
 };
 
@@ -27,6 +28,14 @@ typedef struct Node{
   struct Node *lhs;
   struct Node *rhs;
   int val;
+} Node;
+
+typedef struct Node{
+  int ty;
+  struct Node *lhs;
+  struct Node *rhs;
+  int val;
+  char name;
 } Node;
 
 typedef struct{
@@ -44,7 +53,29 @@ void error(char *fmt, ... );
 
 
 Token tokens[100];
+Node *code[100];
 int pos = 0;
+
+Node *assign(){
+  Node *node = add();
+  while(consume('='))
+    node = new_node('=', node, assign());
+  return node;
+}
+
+Node *stmt(){
+  Node *node = assign();
+  if(!consume(';'))
+    error("';'ではないトークンです: %s", tokens[pos].input);
+  return node;
+}
+
+void program(){
+  int i = 0;
+  while (tokens[pos].ty != TK_EOF)
+    code[i++] = stmt();
+  code[i] = NULL;
+}
 
 int expect(int line, int expected, int actual){
   if(expected == actual)
@@ -147,9 +178,37 @@ Node *term(){
   error("数値でも開きカッコでもないトークンです: %s", tokens[pos].input);
 }
 
+void gen_lval(Node *node){
+  if(node->ty != ND_IDENT)
+    error("代入の左辺値が変数ではありません");
+  int offset = ('z' - node->name + 1) * 8;
+  printf("  mov rax, rdp\n");
+  printf("  sub rax, %d\n", offset);
+  printf("  push rax\n");
+}
+
 void gen(Node * node){
   if (node->ty == ND_NUM){
     printf("  push %d\n", node->val);
+    return;
+  }
+
+  if(node->ty == ND_IDENT){
+    gen_lval(node);
+    printf("  pop rax\n");
+    printf("  mov rax, [rax]\n");
+    printf("  push rax\n");
+    return;
+  }
+
+  if(node->ty == '='){
+    gen_lval(node->lhs);
+    gen(node->rhs);
+
+    printf("  pop rdi\n");
+    printf("  pop rax\n");
+    printf("  mov [rax], rdi\n");
+    printf("  push rdi\n");
     return;
   }
 
@@ -204,6 +263,14 @@ void tokenize(char *p){
       continue;
     }
 
+    if('a' <= *p && *p <= 'z'){
+      tokens[i].ty = TK_IDENT;
+      tokens[i].input = p;
+      i++;
+      p++;
+      continue;
+    }
+
     if (isdigit(*p)){
       tokens[i].ty = ND_NUM;
       tokens[i].input = p;
@@ -232,19 +299,30 @@ int main(int argc, char **argv){
   }
 
   tokenize(argv[1]);
-  Node *node = add();
+  program();
 
   // アセンブリの前半部分を出力
   printf(".intel_syntax noprefix\n");
   printf(".global main\n");
   printf("main:\n");
 
-  // 抽象構文木を下りながらコード生成
-  gen(node);
+  //プロローグ
+  //変数26個分の領域を確保する
+  printf("  push rbp\n");
+  printf("  mov rbp, rsp\n");
+  printf("  sub rsp, 208\n");
 
-  // スタックトップに指揮全体の値が残っているはずなので
+  for(int i = 0; code[i]; i++){
+    gen(code[i]);
+
+    // 式の評価結果としてスタックに１つの値が残っている
+    // はずなので、スタックが溢れないようにポップしておく
+    printf("  pop rax\n");
+  }
+
   // それをRAXにロードして関数からの返り値とする
-  printf("  pop rax\n");
+  printf("  mov rsp, rbp\n");
+  printf("  pop rbp\n");
   printf("  ret\n");
   return 0;
 }
